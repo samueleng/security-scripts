@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AssetMap xmlns="http://www.smpte-ra.org/schemas/429-9/2007/AM">
+<Id>urn:uuid:acc1d3c8-702d-4ab5-83ba-33f450ceacb8</Id>
+<AssetList>
+<Asset>
+<Id>urn:uuid:35e05073-878e-4b2f-b69d-2369f25adfc9</Id>
+<ChunkList><Chunk>
+<Path>https://videos.pexels.com@fate-suite.ffmpeg.org/imf/countdown/countdown-small.mxf</Path>
+</Chunk></ChunkList>
+</Asset>
+<Asset>
+<Id>urn:uuid:bb2ce11c-1bb6-4781-8e69-967183d02b9b</Id>
+<ChunkList><Chunk><Path>CPL.xml</Path></Chunk></ChunkList>
+</Asset>
+</AssetList>
+</AssetMap>
