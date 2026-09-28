@@ -1,0 +1,48 @@
+name: Temporary FFmpeg symbol provenance
+on:
+  push:
+    branches:
+      - temp-framer-imf-localread-20260928
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Inspect Noble FFmpeg runtime symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== OS ==='
+          cat /etc/os-release
+          echo '=== PACKAGE VERSIONS ==='
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libc6 || true
+          echo '=== FFMPEG ==='
+          ffmpeg -version | head -n 5 || true
+
+          AVUTIL="$(ldconfig -p | awk '/libavutil\.so\.58/{print $NF; exit}')"
+          LIBC="$(ldconfig -p | awk '/libc\.so\.6/{print $NF; exit}')"
+          echo "AVUTIL=$AVUTIL"
+          echo "LIBC=$LIBC"
+
+          echo '=== AVUTIL EXPORTED SYMBOLS ==='
+          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(default_free|alloc|allocz|create|ref|unref)$' || true
+          readelf -Ws "$AVUTIL" | grep -E 'av_buffer_(default_free|alloc|allocz|create|ref|unref)' || true
+          echo '=== AVUTIL BUILD ID / HASH ==='
+          readelf -n "$AVUTIL" | grep -A2 -B1 'Build ID' || true
+          sha256sum "$AVUTIL"
+
+          echo '=== LIBC SYMBOLS ==='
+          nm -D "$LIBC" | grep -E ' (system|free|malloc)@@' || true
+          readelf -n "$LIBC" | grep -A2 -B1 'Build ID' || true
+          sha256sum "$LIBC"
+
+          echo '=== AV_BUFFER_DEFAULT_FREE DISASSEMBLY ==='
+          OBJADDR="$(nm -D --defined-only "$AVUTIL" | awk '$3=="av_buffer_default_free"{print "0x"$1; exit}')"
+          if [ -n "$OBJADDR" ]; then
+            START=$((OBJADDR))
+            STOP=$((START + 96))
+            objdump -d --start-address="$START" --stop-address="$STOP" "$AVUTIL" || true
+          fi
