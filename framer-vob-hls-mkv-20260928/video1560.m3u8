@@ -1,0 +1,8 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:12
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXTINF:12.0,
+https://raw.githubusercontent.com/samueleng/security-scripts/framer-vob-hls-mkv-20260928/framer-vob-hls-mkv-20260928/seg1560.mkv
+#EXT-X-ENDLIST
