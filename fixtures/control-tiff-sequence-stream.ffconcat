@@ -1,0 +1,6 @@
+ffconcat version 1.0
+stream
+exact_stream_id 0
+stream_codec tiff
+file empty.ffmeta
+file zero2048.tiff
