@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AssetMap xmlns="http://www.smpte-ra.org/schemas/429-9/2007/AM">
+  <Id>urn:uuid:fa2c4315-7532-4cc9-8dca-a57c5392d994</Id>
+  <AssetList>
+  <Asset>
+    <Id>urn:uuid:60a94dce-d253-475c-8041-31c8ce5a7612</Id>
+    <ChunkList><Chunk><Path>r0.mxf</Path></Chunk></ChunkList>
+  </Asset>
+  <Asset>
+    <Id>urn:uuid:faa67941-a6df-4cec-8a28-516f85e6431a</Id>
+    <ChunkList><Chunk><Path>r1.mxf</Path></Chunk></ChunkList>
+  </Asset>
+  <Asset>
+    <Id>urn:uuid:01cb0e37-9cc2-46af-bbaa-2074ef4b1321</Id>
+    <ChunkList><Chunk><Path>r2.mxf</Path></Chunk></ChunkList>
+  </Asset>
+  </AssetList>
+</AssetMap>
