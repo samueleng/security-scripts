@@ -1,0 +1,7 @@
+ffconcat version 1.0
+stream
+exact_stream_id 0
+stream_codec ansi
+file 'file:///etc/hostname#x.ans'
+option protocol_whitelist file
+duration 1
