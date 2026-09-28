@@ -11,43 +11,56 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     steps:
-      - name: Inspect Noble FFmpeg runtime symbols
+      - name: Resolve Noble FFmpeg buffer-pool callback
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== OS ==='
-          cat /etc/os-release
-
-          echo '=== INSTALL NOBLE FFMPEG ==='
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils
-
-          echo '=== PACKAGE VERSIONS ==='
-          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libc6 || true
-          echo '=== FFMPEG ==='
-          ffmpeg -version | head -n 5 || true
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils wget file
 
           AVUTIL="$(ldconfig -p | awk '/libavutil\.so\.58/{print $NF; exit}')"
-          LIBC="$(ldconfig -p | awk '/libc\.so\.6/{print $NF; exit}')"
           echo "AVUTIL=$AVUTIL"
-          echo "LIBC=$LIBC"
+          echo '=== PACKAGE ==='
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58
+          echo '=== EXPORTED BUFFER-POOL SYMBOLS ==='
+          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(pool|get|default_free|alloc|create|unref)' || true
 
-          echo '=== AVUTIL EXPORTED SYMBOLS ==='
-          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(default_free|alloc|allocz|create|ref|unref)(@@|$)' || true
-          readelf -Ws "$AVUTIL" | grep -E 'av_buffer_(default_free|alloc|allocz|create|ref|unref)' || true
-          echo '=== AVUTIL BUILD ID / HASH ==='
-          readelf -n "$AVUTIL" | grep -A2 -B1 'Build ID' || true
-          sha256sum "$AVUTIL"
+          echo '=== EXPORTED SYMBOLS WITH PAGE OFFSET f50 ==='
+          nm -D --defined-only "$AVUTIL" | python3 -c '
+import sys
+for line in sys.stdin:
+    p=line.split()
+    if len(p)>=3:
+        try: a=int(p[0],16)
+        except: continue
+        if (a & 0xfff)==0xf50: print(line.rstrip())
+'
 
-          echo '=== LIBC SYMBOLS ==='
-          nm -D "$LIBC" | grep -E ' (system|free|malloc)@@' || true
-          readelf -n "$LIBC" | grep -A2 -B1 'Build ID' || true
-          sha256sum "$LIBC"
+          echo '=== DEBUG PACKAGE ==='
+          DDEB=/tmp/libavutil58-dbgsym.ddeb
+          URL='https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavutil58-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
+          wget -q "$URL" -O "$DDEB"
+          echo "downloaded $(stat -c%s "$DDEB") bytes"
+          mkdir -p /tmp/avutil-dbg
+          dpkg-deb -x "$DDEB" /tmp/avutil-dbg
+          find /tmp/avutil-dbg -type f -maxdepth 8 -print -exec file {} \;
 
-          echo '=== AV_BUFFER_DEFAULT_FREE DISASSEMBLY ==='
-          OBJADDR="$(nm -D --defined-only "$AVUTIL" | awk '$3 ~ /^av_buffer_default_free/{print "0x"$1; exit}')"
-          if [ -n "$OBJADDR" ]; then
-            START=$((OBJADDR))
-            STOP=$((START + 96))
-            objdump -d --start-address="$START" --stop-address="$STOP" "$AVUTIL" || true
-          fi
+          DBG="$(find /tmp/avutil-dbg -type f -name '*.debug' | head -n1)"
+          echo "DBG=$DBG"
+          echo '=== POOL RELEASE SYMBOL ==='
+          nm -an "$DBG" | grep -E 'pool_release_buffer|pool_alloc_buffer|buffer_pool_flush|buffer_pool_free' || true
+          readelf -Ws "$DBG" | grep -E 'pool_release_buffer|pool_alloc_buffer|buffer_pool_flush|buffer_pool_free' || true
+
+          echo '=== ALL DEBUG SYMBOLS WITH PAGE OFFSET f50 ==='
+          nm -an "$DBG" | python3 -c '
+import sys
+for line in sys.stdin:
+    p=line.split()
+    if len(p)>=3:
+        try: a=int(p[0],16)
+        except: continue
+        if (a & 0xfff)==0xf50: print(line.rstrip())
+'
+
+          echo '=== NEAREST BUFFER SOURCE SYMBOLS ==='
+          nm -an "$DBG" | grep -E 'buffer_(create|replace|pool|default)|av_buffer_' | head -n 120 || true
