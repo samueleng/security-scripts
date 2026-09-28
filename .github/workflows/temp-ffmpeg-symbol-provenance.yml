@@ -1,4 +1,4 @@
-name: Temporary FFmpeg safe pool layout
+name: Temporary FFmpeg decoder pool layout
 on:
   push:
     branches:
@@ -14,7 +14,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libavutil-dev gcc
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc
           cat >/tmp/pool.c <<'EOF'
           #include <libavutil/buffer.h>
           #include <libavutil/mem.h>
@@ -22,50 +22,30 @@ jobs:
           #include <stdio.h>
           #include <stddef.h>
           #include <malloc.h>
-
           typedef struct LocalBuffer {
-              uint8_t *data;
-              size_t size;
-              unsigned refcount;
-              unsigned _pad;
-              void (*free_cb)(void*, uint8_t*);
-              void *opaque;
-              int flags;
-              int flags_internal;
+              uint8_t *data; size_t size; unsigned refcount; unsigned _pad;
+              void (*free_cb)(void*, uint8_t*); void *opaque; int flags; int flags_internal;
           } LocalBuffer;
-
           typedef struct LocalEntry {
-              uint8_t *data;
-              void *opaque;
-              void (*free_cb)(void*, uint8_t*);
-              AVBufferPool *pool;
-              struct LocalEntry *next;
-              LocalBuffer buffer;
+              uint8_t *data; void *opaque; void (*free_cb)(void*, uint8_t*);
+              AVBufferPool *pool; struct LocalEntry *next; LocalBuffer buffer;
           } LocalEntry;
-
           static void show(const char *name, AVBufferRef *r) {
               LocalBuffer *b=(LocalBuffer*)r->buffer;
               LocalEntry *e=(LocalEntry*)b->opaque;
               printf("%s ref=%p buf=%p data=%p req=%zu usable=%zu free=%p entry=%p\n",
                      name,(void*)r,(void*)b,(void*)b->data,b->size,
                      malloc_usable_size(b->data),(void*)b->free_cb,(void*)e);
-              printf("%s entry_fields data=%p opaque=%p orig_free=%p pool=%p next=%p embedded_buf=%p\n",
-                     name,(void*)e->data,e->opaque,(void*)e->free_cb,(void*)e->pool,
-                     (void*)e->next,(void*)&e->buffer);
-              printf("%s deltas data_to_ref=%td data_to_buf=%td data_to_entry=%td data_end_to_entry=%td data_end_to_buf=%td\n",
-                     name,(char*)r-(char*)b->data,(char*)b-(char*)b->data,(char*)e-(char*)b->data,
-                     (char*)e-((char*)b->data+b->size),(char*)b-((char*)b->data+b->size));
+              printf("%s deltas data_to_ref=%td data_to_buf=%td data_to_entry=%td\n",
+                     name,(char*)r-(char*)b->data,(char*)b-(char*)b->data,(char*)e-(char*)b->data);
           }
-
           int main(void) {
               printf("sizeof LocalBuffer=%zu LocalEntry=%zu AVBufferRef=%zu\n",
                      sizeof(LocalBuffer),sizeof(LocalEntry),sizeof(AVBufferRef));
               AVBufferPool *py=av_buffer_pool_init(2127,av_buffer_allocz);
               AVBufferPool *pu=av_buffer_pool_init(1103,av_buffer_allocz);
               AVBufferPool *pv=av_buffer_pool_init(1103,av_buffer_allocz);
-              AVBufferRef *y=av_buffer_pool_get(py);
-              AVBufferRef *u=av_buffer_pool_get(pu);
-              AVBufferRef *v=av_buffer_pool_get(pv);
+              AVBufferRef *y=av_buffer_pool_get(py), *u=av_buffer_pool_get(pu), *v=av_buffer_pool_get(pv);
               show("Y",y); show("U",u); show("V",v);
               av_buffer_unref(&y); av_buffer_unref(&u); av_buffer_unref(&v);
               av_buffer_pool_uninit(&py); av_buffer_pool_uninit(&pu); av_buffer_pool_uninit(&pv);
@@ -73,5 +53,61 @@ jobs:
           }
           EOF
           gcc -O0 -g /tmp/pool.c -o /tmp/pool $(pkg-config --cflags --libs libavutil)
-          dpkg-query -W -f='\${Package}=\${Version}\n' libavutil58 libc6
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libc6
           /tmp/pool
+
+      - name: Measure actual safe JPEG2000 decoder allocation adjacency
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/hook.c <<'EOF'
+          #define _GNU_SOURCE
+          #include <dlfcn.h>
+          #include <libavutil/buffer.h>
+          #include <stdint.h>
+          #include <stdio.h>
+          #include <stddef.h>
+          #include <malloc.h>
+          typedef struct LocalBuffer {
+              uint8_t *data; size_t size; unsigned refcount; unsigned _pad;
+              void (*free_cb)(void*, uint8_t*); void *opaque; int flags; int flags_internal;
+          } LocalBuffer;
+          typedef struct LocalEntry {
+              uint8_t *data; void *opaque; void (*free_cb)(void*, uint8_t*);
+              AVBufferPool *pool; struct LocalEntry *next; LocalBuffer buffer;
+          } LocalEntry;
+          AVBufferRef *av_buffer_pool_get(AVBufferPool *pool) {
+              static AVBufferRef *(*real_fn)(AVBufferPool *);
+              if (!real_fn) real_fn=dlsym(RTLD_NEXT,"av_buffer_pool_get");
+              AVBufferRef *r=real_fn(pool);
+              if (r) {
+                  LocalBuffer *b=(LocalBuffer*)r->buffer;
+                  LocalEntry *e=(LocalEntry*)b->opaque;
+                  if (b->size==2127 || b->size==1103) {
+                      fprintf(stderr,
+                        "DECODE_POOL size=%zu data=%p usable=%zu buf=%p ref=%p entry=%p "
+                        "d_buf=%td d_ref=%td d_entry=%td free=%p orig_free=%p next=%p\n",
+                        b->size,(void*)b->data,malloc_usable_size(b->data),
+                        (void*)b,(void*)r,(void*)e,
+                        (char*)b-(char*)b->data,(char*)r-(char*)b->data,(char*)e-(char*)b->data,
+                        (void*)b->free_cb,(void*)e->free_cb,(void*)e->next);
+                  }
+              }
+              return r;
+          }
+          EOF
+          gcc -O0 -g -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl $(pkg-config --cflags --libs libavutil)
+          python3 - <<'PY'
+          import base64
+          s='''AAAADGpQICANCocKAAAAFGZ0eXBqcDIgAAAAAGpwMiAAAABJanAyaAAAABZpaGRyAAAAIAAAAEAA
+          AwgHAAAAAAAPY29scgEAAAAAABIAAAAcY2RlZgADAAAAAAACAAEAAAACAAIAAAACAAAAympwMmP/
+          T/9RAC8AAAAAAEAAAAAgAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAMHAQEHAgIHAgL/UgAMAAAA
+          AQAGAgIAAf9cABYgQEhIUEhIUEhIUEhIUEhIUEhIUP+QAAoAAAAAAGcAAf+T32gQCYf/AAgH/wAI
+          BwAAAKHzggABuwAAp9oMC0FzRGLwAACj6gkACchYhMatzBLXAACh848AZRCkKnPzhveC/MUI/qlg
+          AACx+oF/UCiMWOlqioxY6WqKAAD/2Q=='''
+          b=base64.b64decode(''.join(s.split()))
+          assert b.count(b'cdef')==1
+          b=b.replace(b'cdef',b'free')
+          open('/tmp/safe.jp2','wb').write(b)
+          PY
+          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -i /tmp/safe.jp2 -frames:v 1 -f null - 2>&1 | grep -E 'DECODE_POOL' || true
