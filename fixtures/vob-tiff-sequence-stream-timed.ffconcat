@@ -1,0 +1,8 @@
+ffconcat version 1.0
+stream
+exact_stream_id 0
+stream_codec tiff
+file vob-mark.idx
+duration 0
+file zero2048.tiff
+duration 1
