@@ -1,7 +1,4 @@
 ffconcat version 1.0
-stream
-exact_stream_id 0
-stream_codec ansi
-file 'file:///etc/hostname#x.ans'
-option protocol_whitelist file
+file 'https://videos.pexels.com/video-files/7230868/7230868-hd_1920_1080_25fps.mp4'
+option protocol_whitelist http,https,tls,tcp
 duration 1
