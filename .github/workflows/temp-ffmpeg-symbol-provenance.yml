@@ -1,43 +1,11 @@
-name: Temporary FFmpeg symbol provenance
+name: Temporary provenance workflow (disabled)
 on:
-  push:
-    branches:
-      - temp-framer-imf-localread-20260928
-
+  workflow_dispatch:
 permissions:
   contents: read
-
 jobs:
-  inspect:
-    runs-on: ubuntu-24.04
+  disabled:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Resolve Noble FFmpeg f50 symbols
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils wget file
-
-          echo '=== PACKAGE ==='
-          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libavcodec60 libavformat60
-
-          fetch_dbg() {
-            pkg="$1"
-            url="$2"
-            out="/tmp/$pkg.ddeb"
-            dir="/tmp/$pkg-dbg"
-            wget -q "$url" -O "$out"
-            mkdir -p "$dir"
-            dpkg-deb -x "$out" "$dir"
-            dbg="$(find "$dir" -type f -name '*.debug' | head -n1)"
-            echo "=== $pkg DBG=$dbg ==="
-            file "$dbg"
-            echo "--- f50 symbols ---"
-            nm -an "$dbg" | awk 'tolower($1) ~ /f50$/ {print}' || true
-            echo "--- buffer/frame/pool related ---"
-            nm -an "$dbg" | grep -Ei 'buffer|frame_pool|pool_release|pool_alloc|get_buffer|release_buffer' | head -n 300 || true
-          }
-
-          fetch_dbg libavutil58 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavutil58-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
-          fetch_dbg libavcodec60 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavcodec60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
-          fetch_dbg libavformat60 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavformat60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
+      - run: echo disabled
