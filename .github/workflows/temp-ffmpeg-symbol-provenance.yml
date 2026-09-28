@@ -1,4 +1,4 @@
-name: Temporary FFmpeg safe GDB calibration
+name: Temporary FFmpeg safe object-layout calibration
 on:
   push:
     branches:
@@ -9,26 +9,37 @@ jobs:
   calibrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Inspect benign 64x32 YUV420 JPEG2000 frame allocation
+      - name: Inspect benign YUV420 AVBuffer object layout
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg gdb
           ffmpeg -v error -f lavfi -i color=c=black:s=64x32:r=1 -frames:v 1 -pix_fmt yuv420p -c:v jpeg2000 -f nut /tmp/safe.nut
-          echo '=== SAFE INPUT ==='
-          ffprobe -v error -show_entries stream=codec_name,pix_fmt,width,height -of compact /tmp/safe.nut
-          echo '=== GDB ==='
           cat >/tmp/gdb.cmd <<'EOF'
           set pagination off
           set breakpoint pending on
           break av_buffer_pool_get
           commands
             silent
-            printf "POOL_GET pool=%p\n", $rdi
+            set $pool=$rdi
+            finish
+            set $ref=$rax
+            set $buf=*(void **)$ref
+            set $data=*(void **)($buf+0)
+            set $size=*(unsigned long *)($buf+8)
+            set $freecb=*(void **)($buf+24)
+            set $opaque=*(void **)($buf+32)
+            printf "RETURN pool=%p ref=%p buf=%p data=%p size=%lu free=%p opaque=%p\n",$pool,$ref,$buf,$data,$size,$freecb,$opaque
+            printf "REF "
+            x/3gx $ref
+            printf "AVBUFFER "
+            x/6gx $buf
+            printf "OPAQUE "
+            x/11gx $opaque
             continue
           end
           run -v error -threads 1 -i /tmp/safe.nut -frames:v 1 -f null -
           quit
           EOF
-          gdb -q -batch -x /tmp/gdb.cmd --args ffmpeg 2>&1 | grep -E 'POOL_GET|Program received|SIG'
+          gdb -q -batch -x /tmp/gdb.cmd --args ffmpeg
