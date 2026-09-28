@@ -1,4 +1,4 @@
-name: Temporary exact stale-qword calibration
+name: Temporary FFmpeg 6.1 media compatibility fixture
 on:
   push:
     branches:
@@ -6,69 +6,40 @@ on:
 permissions:
   contents: read
 jobs:
-  calibrate:
+  build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Identify pre-TIFF stale 80-byte contents
+      - name: Build benign aligned two-track fixture
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc binutils
-          cat >/tmp/sameinv.b64 <<'B64'
-          AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABNNtZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAgI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
-          B64
-          base64 -d /tmp/sameinv.b64 >/tmp/sameinv.mov
-
-          cat >/tmp/hook.c <<'EOF'
-          #define _GNU_SOURCE
-          #include <dlfcn.h>
-          #include <execinfo.h>
-          #include <malloc.h>
-          #include <stdint.h>
-          #include <stdio.h>
-          #include <unistd.h>
-          #include <string.h>
-
-          static int (*real_pm)(void **, size_t, size_t);
-          static __thread int busy;
-          static unsigned long seq;
-
-          static void emit_hex(const unsigned char *p, size_t n){
-            char h[256]; int q=0;
-            for(size_t i=0;i<n && q<(int)sizeof(h)-3;i++) q+=snprintf(h+q,sizeof(h)-q,"%02x",p[i]);
-            h[q]=0;
-            dprintf(2,"%s",h);
-          }
-          int posix_memalign(void **m,size_t al,size_t sz){
-            if(!real_pm) real_pm=dlsym(RTLD_NEXT,"posix_memalign");
-            int rc=real_pm(m,al,sz);
-            if(rc==0 && sz==80 && !busy){
-              busy=1;
-              unsigned long id=++seq;
-              dprintf(2,"STALE80 id=%lu ptr=%p usable=%zu first64=",id,*m,malloc_usable_size(*m));
-              emit_hex((const unsigned char*)*m,64);
-              dprintf(2,"\n");
-              void *bt[12]; int n=backtrace(bt,12);
-              for(int i=1;i<n;i++){
-                Dl_info di={0};
-                if(dladdr(bt[i],&di) && di.dli_fname){
-                  uintptr_t off=(uintptr_t)bt[i]-(uintptr_t)di.dli_fbase;
-                  dprintf(2,"  BT id=%lu i=%d obj=%s sym=%s off=0x%lx\n",
-                    id,i,di.dli_fname,di.dli_sname?di.dli_sname:"?",(unsigned long)off);
-                }
-              }
-              busy=0;
-            }
-            return rc;
-          }
-          EOF
-          gcc -O2 -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl
-
-          set +e
-          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -ss 0 -i /tmp/sameinv.mov -map 0:1 -frames:v 1 -f rawvideo -pix_fmt gray /tmp/out.raw 2>/tmp/trace.log
-          rc=$?
-          set -e
-          echo "ffmpeg_rc=$rc"
-          stat -c 'out_bytes=%s' /tmp/out.raw 2>/dev/null || true
-          cat /tmp/trace.log
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavcodec60 libavutil58
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          W,H=384,32
+          Path('/tmp/frame.yuv').write_bytes(
+              bytes([0x11])*(W*H)
+              + bytes([0x22])*((W//2)*(H//2))
+              + bytes([0x33])*((W//2)*(H//2))
+          )
+          t='SUkqAAgAAAAJAAABBAABAAAAUAAAAAEBBAABAAAACAAAAAIBAwABAAAACAAAAAMBAwABAAAACAAAAAYBAwABAAAAAQAAABEBBAAIAAAAegAAABUBAwABAAAAAQAAABYBBAABAAAAAQAAABcBBAAIAAAAmgAAAAAAAAC6AAAAwgAAAMoAAADSAAAA2gAAAOIAAADqAAAA8gAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAAeJwDAAAAAAF4nAMAAAAAAXicAwAAAAABeJwDAAAAAAF4nAMAAAAAAXicAwAAAAABeJwDAAAAAAF4nAMAAAAAAQ'
+          t += '='*((4-len(t)%4)%4)
+          Path('/tmp/short80x8.tiff').write_bytes(base64.b64decode(t))
+          PY
+          ffmpeg -hide_banner -loglevel error -f rawvideo -pixel_format yuv420p -video_size 384x32 \
+            -i /tmp/frame.yuv -frames:v 1 -c:v magicyuv /tmp/safe.mkv
+          ffmpeg -hide_banner -loglevel error -i /tmp/safe.mkv -loop 1 -framerate 1 \
+            -i /tmp/short80x8.tiff -t 1 -map 0:v:0 -map 1:v:0 \
+            -c:v:0 copy -c:v:1 copy -tag:v:0 M8Y0 -tag:v:1 tiff \
+            -movflags +faststart /tmp/sameinv384-ff61.mov
+          echo '=== PROBE ==='
+          ffprobe -hide_banner -loglevel error -show_streams -of compact /tmp/sameinv384-ff61.mov
+          echo '=== HASH ==='
+          sha256sum /tmp/sameinv384-ff61.mov
+          echo '=== FIXTURE_BASE64_BEGIN ==='
+          base64 -w0 /tmp/sameinv384-ff61.mov
+          echo
+          echo '=== FIXTURE_BASE64_END ==='
