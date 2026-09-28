@@ -1,4 +1,4 @@
-name: Temporary exact allocation symbol map
+name: Temporary exact stale-qword calibration
 on:
   push:
     branches:
@@ -6,23 +6,69 @@ on:
 permissions:
   contents: read
 jobs:
-  map:
+  calibrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Resolve FFmpeg 6.1.1 allocation callers
+      - name: Identify pre-TIFF stale 80-byte contents
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils wget
-          D=/tmp/codec.ddeb
-          wget -q 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavcodec60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb' -O "$D"
-          mkdir -p /tmp/dbg
-          dpkg-deb -x "$D" /tmp/dbg
-          DBG="$(find /tmp/dbg -type f -name '*.debug' | head -n1)"
-          echo "DBG=$DBG"
-          for a in 0x7cf6b8 0x7d4258 0x2a8525 0x6bc1e0; do
-            echo "=== $a ==="
-            addr2line -f -C -e "$DBG" "$a" || true
-            nm -an "$DBG" | awk -v x="$a" 'BEGIN{t=strtonum(x);best=-1} /^[0-9a-fA-F]+ [tTwW] /{v=strtonum("0x"$1); if(v<=t && v>best){best=v; line=$0}} END{print line}' || true
-          done
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc binutils
+          cat >/tmp/sameinv.b64 <<'B64'
+AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABNNtZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAgICQAB7//////////gAAAB+///gAAAAAH7//+AAAAAAe//////////4AAAAfv//4AAAAAB+///gAAAAAHv/////////+AAAAH7//+AAAAAAfv//4AAAAAB7//////////gAAAB+///gAAAAAH7//+AAABJSSoACAAAAAkAAAEEAAEAAABQAAAAAQEEAAEAAAAIAAAAAgEDAAEAAAAIAAAAAwEDAAEAAAAIAAAABgEDAAEAAAABAAAAEQEEAAgAAAB6AAAAFQEDAAEAAAABAAAAFgEEAAEAAAABAAAAFwEEAAgAAACaAAAAAAAAALoAAADCAAAAygAAANIAAADaAAAA4gAAAOoAAADyAAAACAAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAB4nAMAAAAAAXicAwAAAAABeJwDAAAAAAF4nAMAAAAAAXicAwAAAAABeJwDAAAAAAF4nAMAAAAAAXicAwAAAAABAAAE8m1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAPoAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAJLdHJhawAAAFx0a2hkAAAAAgAAAAAAAAAAAAAAAQAAAAAAAAPoAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAIAAAACAAAAAAAJGVkdHMAAAAcZWxzdAAAAAAAAAABAAAD6AAAAAAAAQAAAAABw21kaWEAAAAgbWRoZAAAAAAAAAAAAAAAAAAAQAAAAEAAf/8AAAAAAC1oZGxyAAAAAG1obHJ2aWRlAAAAAAAAAAAAAAAADFZpZGVvSGFuZGxlcgAAAW5taW5mAAAAFHZtaGQAAAABAAAAAAAAAAAAAAAsaGRscgAAAABkaGxydXJsIAAAAAAAAAAAAAAAAAtEYXRhSGFuZGxlcgAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAQJzdGJsAAAAnnN0c2QAAAAAAAAAAQAAAI5NOFkwAAAAAAAAAAEAAAAARkZNUAAAAgAAAAIAAAAAAABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAKGdsYmxNQUdZIAAAAAdpDAAAACAACAAAAAgAAAAIAAAACAAAAAAAABBwYXNwAAAAAQAAAAEAAAAYc3R0cwAAAAAAAAABAAAAAQAAQAAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAD0QAAAAEAAAAUc3RjbwAAAAAAAAABAAAAJAAAAhN0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAACAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAFAAAAABAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGLbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQAB//wAAAAAALWhkbHIAAAAAbWhscnZpZGUAAAAAAAAAAAAAAAAMVmlkZW9IYW5kbGVyAAABNm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACxoZGxyAAAAAGRobHJ1cmwgAAAAAAAAAAAAAAAAC0RhdGFIYW5kbGVyAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAAAynN0YmwAAABmc3RzZAAAAAAAAAABAAAAVnRpZmYAAAAAAAAAAQAAAABGRk1QAAACAAAAAgAAUAABAEgAAABIAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY//8AAAAYc3R0cwAAAAAAAAABAAAAAQAAQAAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAA+gAAAAEAAAAUc3RjbwAAAAAAAAABAAAD9QAAACB1ZHRhAAAAGKlzd3IADFXETGF2ZjYxLjcuMTAz
+B64
+          base64 -d /tmp/sameinv.b64 >/tmp/sameinv.mov
+
+          cat >/tmp/hook.c <<'EOF'
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <malloc.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+
+static int (*real_pm)(void **, size_t, size_t);
+static __thread int busy;
+static unsigned long seq;
+
+static void emit_hex(const unsigned char *p, size_t n){
+  char h[256]; int q=0;
+  for(size_t i=0;i<n && q<(int)sizeof(h)-3;i++) q+=snprintf(h+q,sizeof(h)-q,"%02x",p[i]);
+  h[q]=0;
+  dprintf(2,"%s",h);
+}
+int posix_memalign(void **m,size_t al,size_t sz){
+  if(!real_pm) real_pm=dlsym(RTLD_NEXT,"posix_memalign");
+  int rc=real_pm(m,al,sz);
+  if(rc==0 && sz==80 && !busy){
+    busy=1;
+    unsigned long id=++seq;
+    dprintf(2,"STALE80 id=%lu ptr=%p usable=%zu first64=",id,*m,malloc_usable_size(*m));
+    emit_hex((const unsigned char*)*m,64);
+    dprintf(2,"\n");
+    void *bt[12]; int n=backtrace(bt,12);
+    for(int i=1;i<n;i++){
+      Dl_info di={0};
+      if(dladdr(bt[i],&di) && di.dli_fname){
+        uintptr_t off=(uintptr_t)bt[i]-(uintptr_t)di.dli_fbase;
+        dprintf(2,"  BT id=%lu i=%d obj=%s sym=%s off=0x%lx\n",
+          id,i,di.dli_fname,di.dli_sname?di.dli_sname:"?",(unsigned long)off);
+      }
+    }
+    busy=0;
+  }
+  return rc;
+}
+EOF
+          gcc -O2 -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl
+
+          set +e
+          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -ss 0 -i /tmp/sameinv.mov -map 0:1 -frames:v 1 -f rawvideo -pix_fmt gray /tmp/out.raw 2>/tmp/trace.log
+          rc=$?
+          set -e
+          echo "ffmpeg_rc=$rc"
+          echo "out_bytes=$(stat -c%s /tmp/out.raw 2>/dev/null || echo 0)"
+          cat /tmp/trace.log
