@@ -1,8 +1,0 @@
-\#*#
-.pylint.d/
-.tox/
-*.py[cod]
-analyze_hosts.output
-Include/
-Lib/
-Scripts/
