@@ -1,0 +1,5 @@
+#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=100000
+https://raw.githubusercontent.com/samueleng/security-scripts/framer-vob-hls-mkv-20260928/framer-vob-hls-mkv-20260928/video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=90000
+https://raw.githubusercontent.com/samueleng/security-scripts/framer-vob-hls-mkv-20260928/framer-vob-hls-mkv-20260928/vob.m3u8
