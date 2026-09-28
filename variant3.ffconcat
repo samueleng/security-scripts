@@ -1,0 +1,10 @@
+ffconcat version 1.0
+stream
+exact_stream_id 0
+stream_codec dvd_subtitle
+stream
+exact_stream_id 1
+file vob-eof.idx
+duration 0.5
+file zero2048.mp4
+duration 1
