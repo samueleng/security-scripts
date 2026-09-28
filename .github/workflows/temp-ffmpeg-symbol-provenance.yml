@@ -1,4 +1,4 @@
-name: Temporary FFmpeg decoder pool layout
+name: Temporary exact sameinv allocator calibration
 on:
   push:
     branches:
@@ -9,57 +9,18 @@ jobs:
   calibrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Measure benign FFmpeg YUV420 pool objects
+      - name: Trace exact sameinv MagicYUV to TIFF allocator reuse
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc
-          cat >/tmp/pool.c <<'EOF'
-          #include <libavutil/buffer.h>
-          #include <libavutil/mem.h>
-          #include <stdint.h>
-          #include <stdio.h>
-          #include <stddef.h>
-          #include <malloc.h>
-          typedef struct LocalBuffer {
-              uint8_t *data; size_t size; unsigned refcount; unsigned _pad;
-              void (*free_cb)(void*, uint8_t*); void *opaque; int flags; int flags_internal;
-          } LocalBuffer;
-          typedef struct LocalEntry {
-              uint8_t *data; void *opaque; void (*free_cb)(void*, uint8_t*);
-              AVBufferPool *pool; struct LocalEntry *next; LocalBuffer buffer;
-          } LocalEntry;
-          static void show(const char *name, AVBufferRef *r) {
-              LocalBuffer *b=(LocalBuffer*)r->buffer;
-              LocalEntry *e=(LocalEntry*)b->opaque;
-              printf("%s ref=%p buf=%p data=%p req=%zu usable=%zu free=%p entry=%p\n",
-                     name,(void*)r,(void*)b,(void*)b->data,b->size,
-                     malloc_usable_size(b->data),(void*)b->free_cb,(void*)e);
-              printf("%s deltas data_to_ref=%td data_to_buf=%td data_to_entry=%td\n",
-                     name,(char*)r-(char*)b->data,(char*)b-(char*)b->data,(char*)e-(char*)b->data);
-          }
-          int main(void) {
-              printf("sizeof LocalBuffer=%zu LocalEntry=%zu AVBufferRef=%zu\n",
-                     sizeof(LocalBuffer),sizeof(LocalEntry),sizeof(AVBufferRef));
-              AVBufferPool *py=av_buffer_pool_init(2127,av_buffer_allocz);
-              AVBufferPool *pu=av_buffer_pool_init(1103,av_buffer_allocz);
-              AVBufferPool *pv=av_buffer_pool_init(1103,av_buffer_allocz);
-              AVBufferRef *y=av_buffer_pool_get(py), *u=av_buffer_pool_get(pu), *v=av_buffer_pool_get(pv);
-              show("Y",y); show("U",u); show("V",v);
-              av_buffer_unref(&y); av_buffer_unref(&u); av_buffer_unref(&v);
-              av_buffer_pool_uninit(&py); av_buffer_pool_uninit(&pu); av_buffer_pool_uninit(&pv);
-              return 0;
-          }
-          EOF
-          gcc -O0 -g /tmp/pool.c -o /tmp/pool $(pkg-config --cflags --libs libavutil)
-          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libc6
-          /tmp/pool
+          cat >/tmp/sameinv.b64 <<'B64'
+          AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABNNtZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAgI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
+          B64
+          base64 -d /tmp/sameinv.b64 >/tmp/sameinv.mov
+          ffprobe -v error -show_entries stream=index,codec_name,width,height,pix_fmt -of compact /tmp/sameinv.mov
 
-      - name: Measure actual safe JPEG2000 decoder allocation adjacency
-        shell: bash
-        run: |
-          set -euo pipefail
           cat >/tmp/hook.c <<'EOF'
           #define _GNU_SOURCE
           #include <dlfcn.h>
@@ -68,6 +29,10 @@ jobs:
           #include <stdio.h>
           #include <stddef.h>
           #include <malloc.h>
+          #include <unistd.h>
+          #include <stdarg.h>
+          #include <string.h>
+
           typedef struct LocalBuffer {
               uint8_t *data; size_t size; unsigned refcount; unsigned _pad;
               void (*free_cb)(void*, uint8_t*); void *opaque; int flags; int flags_internal;
@@ -76,38 +41,72 @@ jobs:
               uint8_t *data; void *opaque; void (*free_cb)(void*, uint8_t*);
               AVBufferPool *pool; struct LocalEntry *next; LocalBuffer buffer;
           } LocalEntry;
-          AVBufferRef *av_buffer_pool_get(AVBufferPool *pool) {
-              static AVBufferRef *(*real_fn)(AVBufferPool *);
-              if (!real_fn) real_fn=dlsym(RTLD_NEXT,"av_buffer_pool_get");
-              AVBufferRef *r=real_fn(pool);
-              if (r) {
+
+          static AVBufferRef *(*real_pool_get)(AVBufferPool *);
+          static int (*real_pm)(void **,size_t,size_t);
+          static void (*real_free)(void *);
+          static __thread int busy;
+          static unsigned long seq;
+          static void *entries[256]; static size_t nentries;
+
+          static void msg(const char *fmt, ...) {
+              if (busy) return; busy=1;
+              char b[1200]; va_list ap; va_start(ap,fmt);
+              int n=vsnprintf(b,sizeof(b),fmt,ap); va_end(ap);
+              if (n>0) write(2,b,(size_t)(n<(int)sizeof(b)?n:(int)sizeof(b)-1));
+              busy=0;
+          }
+          static int entry_id(void *p){
+              for(size_t i=0;i<nentries;i++) if(entries[i]==p) return (int)i;
+              return -1;
+          }
+          AVBufferRef *av_buffer_pool_get(AVBufferPool *pool){
+              if(!real_pool_get) real_pool_get=dlsym(RTLD_NEXT,"av_buffer_pool_get");
+              AVBufferRef *r=real_pool_get(pool);
+              if(r){
                   LocalBuffer *b=(LocalBuffer*)r->buffer;
                   LocalEntry *e=(LocalEntry*)b->opaque;
-                  if (b->size==2127 || b->size==1103) {
-                      fprintf(stderr,
-                        "DECODE_POOL size=%zu data=%p usable=%zu buf=%p ref=%p entry=%p "
-                        "d_buf=%td d_ref=%td d_entry=%td free=%p orig_free=%p next=%p\n",
-                        b->size,(void*)b->data,malloc_usable_size(b->data),
-                        (void*)b,(void*)r,(void*)e,
-                        (char*)b-(char*)b->data,(char*)r-(char*)b->data,(char*)e-(char*)b->data,
-                        (void*)b->free_cb,(void*)e->free_cb,(void*)e->next);
+                  if(b->size<4096 && e && nentries<256){
+                      int id=entry_id(e); if(id<0){id=(int)nentries;entries[nentries++]=e;}
+                      msg("S%06lu POOL id=%d size=%zu data=%p buf=%p ref=%p entry=%p free=%p orig_free=%p pool=%p next=%p\n",
+                          ++seq,id,b->size,b->data,b,r,e,b->free_cb,e->free_cb,e->pool,e->next);
                   }
               }
               return r;
           }
+          int posix_memalign(void **m,size_t al,size_t sz){
+              if(!real_pm) real_pm=dlsym(RTLD_NEXT,"posix_memalign");
+              int rc=real_pm(m,al,sz);
+              if(!busy && rc==0 && (sz==80 || sz==88 || sz==96 || sz==104 || sz==112))
+                  msg("S%06lu ALLOC size=%zu align=%zu ptr=%p usable=%zu entry_id=%d\n",
+                      ++seq,sz,al,*m,malloc_usable_size(*m),entry_id(*m));
+              return rc;
+          }
+          void free(void *p){
+              if(!real_free) real_free=dlsym(RTLD_NEXT,"free");
+              if(!p){real_free(p);return;}
+              int id=entry_id(p);
+              size_t u=malloc_usable_size(p);
+              if(!busy && (id>=0 || (u>=80 && u<=120))){
+                  unsigned char *x=p; char hx[241]; size_t lim=u<80?u:80; int q=0;
+                  for(size_t i=0;i<lim && q<(int)sizeof(hx)-4;i++) q+=snprintf(hx+q,sizeof(hx)-q,"%02x",x[i]);
+                  msg("S%06lu FREE ptr=%p usable=%zu entry_id=%d first80=%s\n",++seq,p,u,id,hx);
+              }
+              real_free(p);
+          }
           EOF
-          gcc -O0 -g -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl $(pkg-config --cflags --libs libavutil)
+          gcc -O2 -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl $(pkg-config --cflags --libs libavutil)
+
+          echo '=== EXACT SAMEINV DECODE ==='
+          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -ss 0 -i /tmp/sameinv.mov -map 0:1 -frames:v 1 -f rawvideo -pix_fmt gray /tmp/out.raw 2>/tmp/trace.log || true
+          grep -E ' POOL | ALLOC size=80| ALLOC size=88| FREE .*entry_id=[0-9]+' /tmp/trace.log || true
+          echo '=== PIXEL QWORDS ==='
           python3 - <<'PY'
-          import base64
-          s='''AAAADGpQICANCocKAAAAFGZ0eXBqcDIgAAAAAGpwMiAAAABJanAyaAAAABZpaGRyAAAAIAAAAEAA
-          AwgHAAAAAAAPY29scgEAAAAAABIAAAAcY2RlZgADAAAAAAACAAEAAAACAAIAAAACAAAAympwMmP/
-          T/9RAC8AAAAAAEAAAAAgAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAMHAQEHAgIHAgL/UgAMAAAA
-          AQAGAgIAAf9cABYgQEhIUEhIUEhIUEhIUEhIUEhIUP+QAAoAAAAAAGcAAf+T32gQCYf/AAgH/wAI
-          BwAAAKHzggABuwAAp9oMC0FzRGLwAACj6gkACchYhMatzBLXAACh848AZRCkKnPzhveC/MUI/qlg
-          AACx+oF/UCiMWOlqioxY6WqKAAD/2Q=='''
-          b=base64.b64decode(''.join(s.split()))
-          assert b.count(b'cdef')==1
-          b=b.replace(b'cdef',b'free')
-          open('/tmp/safe.jp2','wb').write(b)
+          import struct
+          b=open('/tmp/out.raw','rb').read()
+          print('len',len(b))
+          for y in range(0,len(b)//80):
+              row=b[y*80:(y+1)*80]
+              qs=[hex(struct.unpack_from('<Q',row,o)[0]) for o in range(0,80,8)]
+              print('ROW',y,*qs)
           PY
-          LD_PRELOAD=/tmp/hook.so ffmpeg -threads 1 -loglevel error -i /tmp/safe.jp2 -frames:v 1 -f null - 2>&1 | grep -E 'DECODE_POOL' || true
