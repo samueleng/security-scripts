@@ -115,6 +115,8 @@ jobs:
 
           static AVBufferRef *(*real_pool_get)(AVBufferPool *);
           static int (*real_receive)(AVCodecContext *, AVFrame *);
+          static void (*real_unref)(AVBufferRef **);
+          static void (*real_frame_unref)(AVFrame *);
           static uint8_t *u_data;
           static LocalBuffer *u_buf;
           static AVBufferRef *u_ref;
@@ -150,6 +152,44 @@ jobs:
                   }
               }
               return r;
+          }
+
+          static int chosen_region_matches(void) {
+              if (!u_data) return 0;
+              for (int i=0;i<16;i++) {
+                  unsigned want=(unsigned)(((0x480+i)*73+19)&0xff);
+                  if (u_data[0x480+i] != want) return 0;
+              }
+              return 1;
+          }
+
+          static void snapshot_and_exit(const char *where) {
+              if (!chosen_region_matches()) return;
+              ptrdiff_t db=(uint8_t*)u_buf-u_data;
+              ptrdiff_t dr=(uint8_t*)u_ref-u_data;
+              dprintf(2,"SNAPSHOT where=%s U=%p buf=%p(+0x%tx) ref=%p(+0x%tx)\n",
+                      where,u_data,u_buf,db,u_ref,dr);
+              dprintf(2,"ORIG data=%p size=%zu refcount=%u free=%p opaque=%p\n",
+                      orig_data_field,orig_size_field,orig_refcount,orig_free_field,orig_opaque_field);
+              dprintf(2,"BYTES_0460_04e0=");
+              dump_hex(u_data+0x460,0x80);
+              dprintf(2,"BYTES_0480_04b0=");
+              dump_hex(u_data+0x480,0x30);
+              dprintf(2,"BYTES_04c0_04d8=");
+              dump_hex(u_data+0x4c0,0x18);
+              _exit(0);
+          }
+
+          void av_buffer_unref(AVBufferRef **p) {
+              if (!real_unref) real_unref=dlsym(RTLD_NEXT,"av_buffer_unref");
+              snapshot_and_exit("av_buffer_unref");
+              real_unref(p);
+          }
+
+          void av_frame_unref(AVFrame *f) {
+              if (!real_frame_unref) real_frame_unref=dlsym(RTLD_NEXT,"av_frame_unref");
+              snapshot_and_exit("av_frame_unref");
+              real_frame_unref(f);
           }
 
           int avcodec_receive_frame(AVCodecContext *ctx, AVFrame *frame) {
