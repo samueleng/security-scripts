@@ -11,43 +11,33 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     steps:
-      - name: Resolve Noble FFmpeg buffer-pool callback
+      - name: Resolve Noble FFmpeg f50 symbols
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils wget file
 
-          AVUTIL="$(ldconfig -p | awk '/libavutil\.so\.58/{print $NF; exit}')"
-          echo "AVUTIL=$AVUTIL"
           echo '=== PACKAGE ==='
-          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libavcodec60 libavformat60
 
-          echo '=== EXPORTED BUFFER-POOL SYMBOLS ==='
-          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(pool|get|default_free|alloc|create|unref)' || true
+          fetch_dbg() {
+            pkg="$1"
+            url="$2"
+            out="/tmp/$pkg.ddeb"
+            dir="/tmp/$pkg-dbg"
+            wget -q "$url" -O "$out"
+            mkdir -p "$dir"
+            dpkg-deb -x "$out" "$dir"
+            dbg="$(find "$dir" -type f -name '*.debug' | head -n1)"
+            echo "=== $pkg DBG=$dbg ==="
+            file "$dbg"
+            echo "--- f50 symbols ---"
+            nm -an "$dbg" | awk 'tolower($1) ~ /f50$/ {print}' || true
+            echo "--- buffer/frame/pool related ---"
+            nm -an "$dbg" | grep -Ei 'buffer|frame_pool|pool_release|pool_alloc|get_buffer|release_buffer' | head -n 300 || true
+          }
 
-          echo '=== EXPORTED SYMBOLS WITH PAGE OFFSET f50 ==='
-          nm -D --defined-only "$AVUTIL" | awk 'tolower($1) ~ /f50$/ {print}' || true
-
-          echo '=== DEBUG PACKAGE ==='
-          DDEB=/tmp/libavutil58-dbgsym.ddeb
-          URL='https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavutil58-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
-          wget -q "$URL" -O "$DDEB"
-          echo "downloaded $(stat -c%s "$DDEB") bytes"
-          mkdir -p /tmp/avutil-dbg
-          dpkg-deb -x "$DDEB" /tmp/avutil-dbg
-          find /tmp/avutil-dbg -maxdepth 8 -type f -print
-
-          DBG="$(find /tmp/avutil-dbg -type f -name '*.debug' | head -n1)"
-          echo "DBG=$DBG"
-          file "$DBG"
-
-          echo '=== POOL RELEASE SYMBOL ==='
-          nm -an "$DBG" | grep -E 'pool_release_buffer|pool_alloc_buffer|buffer_pool_flush|buffer_pool_free' || true
-          readelf -Ws "$DBG" | grep -E 'pool_release_buffer|pool_alloc_buffer|buffer_pool_flush|buffer_pool_free' || true
-
-          echo '=== ALL DEBUG SYMBOLS WITH PAGE OFFSET f50 ==='
-          nm -an "$DBG" | awk 'tolower($1) ~ /f50$/ {print}' || true
-
-          echo '=== NEAREST BUFFER SOURCE SYMBOLS ==='
-          nm -an "$DBG" | grep -E 'buffer_(create|replace|pool|default)|av_buffer_' | head -n 120 || true
+          fetch_dbg libavutil58 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavutil58-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
+          fetch_dbg libavcodec60 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavcodec60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
+          fetch_dbg libavformat60 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavformat60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb'
