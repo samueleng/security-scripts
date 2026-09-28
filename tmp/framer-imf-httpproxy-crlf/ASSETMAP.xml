@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AssetMap xmlns="http://www.smpte-ra.org/schemas/429-9/2007/AM">
+<Id>urn:uuid:acc1d3c8-702d-4ab5-83ba-33f450ceacbc</Id>
+<AssetList>
+<Asset>
+<Id>urn:uuid:35e05073-878e-4b2f-b69d-2369f25adfc9</Id>
+<ChunkList><Chunk><Path>httpproxy://8js9ofa3qkwj6cn3t2odc6mjva17pw.oastify.com:80/8js9ofa3qkwj6cn3t2odc6mjva17pw.oastify.com:80 HTTP/1.1&#13;&#10;X-PM-One: yes&#13;&#10;&#13;&#10;GET /pm-two HTTP/1.1&#13;&#10;Host: 8js9ofa3qkwj6cn3t2odc6mjva17pw.oastify.com&#13;&#10;X-PM-Two: yes&#13;&#10;X-Pad:</Path></Chunk></ChunkList>
+</Asset>
+</AssetList>
+</AssetMap>
