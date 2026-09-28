@@ -1,69 +1,34 @@
-name: Temporary FFmpeg allocator calibration
+name: Temporary FFmpeg safe GDB calibration
 on:
   push:
     branches:
       - temp-framer-imf-localread-20260928
-
 permissions:
   contents: read
-
 jobs:
   calibrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Compare FFmpeg small allocation classes
+      - name: Inspect benign 64x32 YUV420 JPEG2000 frame allocation
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg libavutil-dev gcc binutils
-          cat > /tmp/cal.c <<'EOF'
-          #define _GNU_SOURCE
-          #include <libavutil/mem.h>
-          #include <malloc.h>
-          #include <stdint.h>
-          #include <stdio.h>
-          #include <string.h>
-
-          static void dumpq(const unsigned char *p, size_t n) {
-              for (size_t o = 0; o + 8 <= n; o += 8) {
-                  uint64_t v;
-                  memcpy(&v, p + o, 8);
-                  printf("  +0x%02zx = 0x%016llx\n", o, (unsigned long long)v);
-              }
-          }
-
-          int main(void) {
-              size_t sizes[] = {24, 48, 80, 88, 96, 104};
-              puts("=== size classes ===");
-              for (size_t i = 0; i < sizeof(sizes)/sizeof(sizes[0]); i++) {
-                  void *p = av_mallocz(sizes[i]);
-                  printf("req=%zu ptr=%p mod32=%zu usable=%zu\n",
-                         sizes[i], p, (size_t)((uintptr_t)p & 31), malloc_usable_size(p));
-                  av_free(p);
-              }
-
-              puts("=== 88 -> 80 immediate reclaim ===");
-              for (int it = 0; it < 12; it++) {
-                  unsigned char *p = av_mallocz(88);
-                  for (size_t o = 0; o + 8 <= 88; o += 8) {
-                      uint64_t v = 0x7f11000000000000ULL | ((uint64_t)(it + 1) << 20) | (uint64_t)(0xf00 + o);
-                      memcpy(p + o, &v, 8);
-                  }
-                  void *old = p;
-                  av_free(p);
-
-                  unsigned char *q = av_malloc(80);
-                  printf("iter=%d old=%p new=%p same=%d usable=%zu\n",
-                         it, old, q, old == (void*)q, malloc_usable_size(q));
-                  dumpq(q, 80);
-                  av_free(q);
-              }
-              return 0;
-          }
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg gdb
+          ffmpeg -v error -f lavfi -i color=c=black:s=64x32:r=1 -frames:v 1 -pix_fmt yuv420p -c:v jpeg2000 -f nut /tmp/safe.nut
+          echo '=== SAFE INPUT ==='
+          ffprobe -v error -show_entries stream=codec_name,pix_fmt,width,height -of compact /tmp/safe.nut
+          echo '=== GDB ==='
+          cat >/tmp/gdb.cmd <<'EOF'
+          set pagination off
+          set breakpoint pending on
+          break av_buffer_pool_get
+          commands
+            silent
+            printf "POOL_GET pool=%p\n", $rdi
+            continue
+          end
+          run -v error -threads 1 -i /tmp/safe.nut -frames:v 1 -f null -
+          quit
           EOF
-          gcc -O0 -g /tmp/cal.c -o /tmp/cal $(pkg-config --cflags --libs libavutil)
-          echo '=== package ==='
-          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libavutil-dev libc6
-          echo '=== run ==='
-          /tmp/cal
+          gdb -q -batch -x /tmp/gdb.cmd --args ffmpeg 2>&1 | grep -E 'POOL_GET|Program received|SIG'
