@@ -17,6 +17,11 @@ jobs:
           set -euo pipefail
           echo '=== OS ==='
           cat /etc/os-release
+
+          echo '=== INSTALL NOBLE FFMPEG ==='
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils
+
           echo '=== PACKAGE VERSIONS ==='
           dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavutil58 libc6 || true
           echo '=== FFMPEG ==='
@@ -28,7 +33,7 @@ jobs:
           echo "LIBC=$LIBC"
 
           echo '=== AVUTIL EXPORTED SYMBOLS ==='
-          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(default_free|alloc|allocz|create|ref|unref)$' || true
+          nm -D --defined-only "$AVUTIL" | grep -E ' av_buffer_(default_free|alloc|allocz|create|ref|unref)(@@|$)' || true
           readelf -Ws "$AVUTIL" | grep -E 'av_buffer_(default_free|alloc|allocz|create|ref|unref)' || true
           echo '=== AVUTIL BUILD ID / HASH ==='
           readelf -n "$AVUTIL" | grep -A2 -B1 'Build ID' || true
@@ -40,7 +45,7 @@ jobs:
           sha256sum "$LIBC"
 
           echo '=== AV_BUFFER_DEFAULT_FREE DISASSEMBLY ==='
-          OBJADDR="$(nm -D --defined-only "$AVUTIL" | awk '$3=="av_buffer_default_free"{print "0x"$1; exit}')"
+          OBJADDR="$(nm -D --defined-only "$AVUTIL" | awk '$3 ~ /^av_buffer_default_free/{print "0x"$1; exit}')"
           if [ -n "$OBJADDR" ]; then
             START=$((OBJADDR))
             STOP=$((START + 96))
