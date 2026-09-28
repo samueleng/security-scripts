@@ -1,0 +1,4 @@
+ffconcat version 1.0
+file 'https://videos.pexels.com/video-files/7230868/7230868-hd_1920_1080_25fps.mp4'
+option protocol_whitelist http,https,tls,tcp
+duration 1
