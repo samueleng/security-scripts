@@ -1,0 +1,207 @@
+name: Temporary CDEF chosen-byte calibration
+on:
+  push:
+    branches:
+      - temp-framer-imf-localread-20260928
+
+permissions:
+  contents: read
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify chosen JPEG2000 bytes at buffer metadata boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg gcc binutils libavutil-dev libavcodec-dev
+
+          echo '=== PACKAGE ==='
+          dpkg-query -W -f='\${Package}=\${Version}\n' ffmpeg libavcodec60 libavutil58
+
+          python3 - <<'PY'
+          from pathlib import Path
+          W,H=64,32
+          y=bytes(((i*73+19)&0xff) for i in range(W*H))
+          u=bytes([0x44])*(W//2)*(H//2)
+          v=bytes([0xcc])*(W//2)*(H//2)
+          Path('/tmp/in.yuv').write_bytes(y+u+v)
+          Path('/tmp/expected_y.bin').write_bytes(y)
+          print('raw bytes', len(y+u+v), 'Y', len(y))
+          print('expected@0x470', y[0x470:0x4e0].hex())
+          PY
+
+          ffmpeg -hide_banner -loglevel error -f rawvideo -pixel_format yuv420p -video_size 64x32 \
+            -i /tmp/in.yuv -frames:v 1 -c:v jpeg2000 -pred 1 -format jp2 /tmp/base.jp2
+
+          ffmpeg -hide_banner -loglevel error -i /tmp/base.jp2 -frames:v 1 -f rawvideo -pix_fmt yuv420p /tmp/base-dec.yuv
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('/tmp/expected_y.bin').read_bytes()
+          b=Path('/tmp/base-dec.yuv').read_bytes()[:len(a)]
+          print('LOSSLESS_Y', a==b, 'diffs', sum(x!=y for x,y in zip(a,b)))
+          assert a==b
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+
+          p=Path('/tmp/base.jp2')
+          b=p.read_bytes()
+
+          def boxes(buf,start,end):
+              o=start
+              out=[]
+              while o+8<=end:
+                  n=struct.unpack_from('>I',buf,o)[0]
+                  typ=buf[o+4:o+8]
+                  if n==1:
+                      n=struct.unpack_from('>Q',buf,o+8)[0]
+                  if n<8 or o+n>end:
+                      raise ValueError((o,n,typ,end))
+                  out.append((o,n,typ))
+                  o+=n
+              if o!=end:
+                  raise ValueError(('trailing',o,end))
+              return out
+
+          top=boxes(b,0,len(b))
+          print('TOP',[(o,n,t.decode(errors='replace')) for o,n,t in top])
+          j=[x for x in top if x[2]==b'jp2h'][0]
+          jo,jn,_=j
+          children=boxes(b,jo+8,jo+jn)
+          print('JP2H_BEFORE',[(o,n,t.decode(errors='replace')) for o,n,t in children])
+
+          kept=b''
+          for o,n,t in children:
+              if t!=b'cdef':
+                  kept += b[o:o+n]
+
+          payload=struct.pack('>H',3)
+          for cn,typ,asoc in ((0,0,2),(1,0,2),(2,0,3)):
+              payload += struct.pack('>HHH',cn,typ,asoc)
+          cdef=struct.pack('>I4s',8+len(payload),b'cdef')+payload
+          new_jp2h=struct.pack('>I4s',8+len(kept)+len(cdef),b'jp2h')+kept+cdef
+          out=b[:jo]+new_jp2h+b[jo+jn:]
+          Path('/tmp/cdef.jp2').write_bytes(out)
+          print('PATCHED',len(b),'->',len(out),'cdef_offset',out.index(b'cdef')-4)
+          print('CDEF_HEX',cdef.hex())
+          PY
+
+          cat >/tmp/hook.c <<'EOF'
+          #define _GNU_SOURCE
+          #include <dlfcn.h>
+          #include <stdint.h>
+          #include <stdio.h>
+          #include <unistd.h>
+          #include <string.h>
+          #include <libavutil/buffer.h>
+          #include <libavutil/frame.h>
+          #include <libavcodec/avcodec.h>
+
+          typedef struct LocalBuffer {
+              uint8_t *data;
+              size_t size;
+              unsigned refcount;
+              unsigned pad;
+              void (*free_cb)(void*,uint8_t*);
+              void *opaque;
+              int flags;
+              int flags_internal;
+          } LocalBuffer;
+
+          static AVBufferRef *(*real_pool_get)(AVBufferPool *);
+          static int (*real_receive)(AVCodecContext *, AVFrame *);
+          static uint8_t *u_data;
+          static LocalBuffer *u_buf;
+          static AVBufferRef *u_ref;
+          static void *orig_data_field;
+          static size_t orig_size_field;
+          static unsigned orig_refcount;
+          static void *orig_free_field;
+          static void *orig_opaque_field;
+          static int n_1103;
+
+          static void dump_hex(const uint8_t *p, size_t n) {
+              for (size_t i=0;i<n;i++) dprintf(2,"%02x",p[i]);
+              dprintf(2,"\n");
+          }
+
+          AVBufferRef *av_buffer_pool_get(AVBufferPool *pool) {
+              if (!real_pool_get) real_pool_get=dlsym(RTLD_NEXT,"av_buffer_pool_get");
+              AVBufferRef *r=real_pool_get(pool);
+              if (r) {
+                  LocalBuffer *b=(LocalBuffer*)r->buffer;
+                  if (b && b->size >= 1000 && b->size <= 1200) {
+                      n_1103++;
+                      dprintf(2,"POOL_%d size=%zu data=%p buf=%p ref=%p free=%p opaque=%p\n",
+                              n_1103,b->size,b->data,b,r,(void*)b->free_cb,b->opaque);
+                      if (n_1103==1) {
+                          u_data=b->data; u_buf=b; u_ref=r;
+                          orig_data_field=b->data;
+                          orig_size_field=b->size;
+                          orig_refcount=b->refcount;
+                          orig_free_field=(void*)b->free_cb;
+                          orig_opaque_field=b->opaque;
+                      }
+                  }
+              }
+              return r;
+          }
+
+          int avcodec_receive_frame(AVCodecContext *ctx, AVFrame *frame) {
+              if (!real_receive) real_receive=dlsym(RTLD_NEXT,"avcodec_receive_frame");
+              int ret=real_receive(ctx,frame);
+              if (ret>=0 && u_data && u_buf && u_ref) {
+                  ptrdiff_t db=(uint8_t*)u_buf-u_data;
+                  ptrdiff_t dr=(uint8_t*)u_ref-u_data;
+                  dprintf(2,"RECEIVE ret=%d fmt=%d frame=%dx%d U=%p buf=%p(+0x%tx) ref=%p(+0x%tx)\n",
+                          ret,frame->format,frame->width,frame->height,u_data,u_buf,db,u_ref,dr);
+                  dprintf(2,"ORIG data=%p size=%zu refcount=%u free=%p opaque=%p\n",
+                          orig_data_field,orig_size_field,orig_refcount,orig_free_field,orig_opaque_field);
+                  dprintf(2,"BYTES_0460_04e0=");
+                  dump_hex(u_data+0x460,0x80);
+                  dprintf(2,"BYTES_0480_04b0=");
+                  dump_hex(u_data+0x480,0x30);
+                  dprintf(2,"BYTES_04c0_04d8=");
+                  dump_hex(u_data+0x4c0,0x18);
+                  _exit(0);
+              }
+              return ret;
+          }
+          EOF
+
+          gcc -O2 -fPIC -shared /tmp/hook.c -o /tmp/hook.so -ldl \
+            $(pkg-config --cflags --libs libavutil libavcodec)
+
+          echo '=== CDEF DECODE UNDER PRE-RELEASE INSPECTION ==='
+          set +e
+          LD_PRELOAD=/tmp/hook.so ffmpeg -hide_banner -threads 1 -loglevel error \
+            -i /tmp/cdef.jp2 -frames:v 1 -f null - 2>/tmp/cdef-trace.log
+          rc=$?
+          set -e
+          echo "decoder_rc=$rc"
+          cat /tmp/cdef-trace.log
+
+          python3 - <<'PY'
+          import re
+          t=open('/tmp/cdef-trace.log','r',errors='replace').read()
+          exp=bytes(((i*73+19)&0xff) for i in range(64*32))
+          m=re.search(r'BYTES_0480_04b0=([0-9a-f]+)',t)
+          if not m:
+              print('NO_METADATA_DUMP')
+              raise SystemExit(2)
+          got=bytes.fromhex(m.group(1))
+          want=exp[0x480:0x4b0]
+          print('EXPECTED_0480_04b0',want.hex())
+          print('GOT_0480_04b0',got.hex())
+          print('CHOSEN_BYTES_MATCH',got==want)
+          if got!=want:
+              for i,(a,b) in enumerate(zip(got,want)):
+                  if a!=b:
+                      print('FIRST_DIFF',hex(0x480+i),hex(a),hex(b))
+                      break
+          PY
